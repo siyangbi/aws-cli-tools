@@ -7,7 +7,7 @@ type nslookup >/dev/null 2>&1 || { echo >&2 "nslookup is required but it is not 
 
 # usage
 usage () {
-  echo "Usage: ${0##*/} [-h|--help] <domain> <port> <security-group-id>"
+  echo "Usage: ${0##*/} [-h|--help] [--sns-topic sns-topic-arn] <domain> <port> <security-group-id>"
   exit 0
 }
 
@@ -16,6 +16,7 @@ for ARG in $@
 do
     case "$1" in
         -h|--help) usage; ;;
+        --sns-topic) SNS_TOPIC=$2; shift 2; ;;
         # *) shift; ;;
     esac
 done
@@ -26,15 +27,24 @@ DOMAIN=$1
 PORT=$2
 SG_ID=$3
 
+SNS_SUBJECT="Allow ${DOMAIN}:${PORT} outbound ${SG_ID}"
+
 allow_ip () {
     CIDR="${1}/32"
     echo "Querying AWS for ${CIDR} port ${PORT} in security group ${SG_ID} "
     if aws ec2 describe-security-groups --group-ids ${SG_ID} --query 'SecurityGroups[*].IpPermissionsEgress[?FromPort==`'"${PORT}"'`].IpRanges' --output text | grep ${CIDR}
     then
         echo "Allow rule is already there."
+        SNS_SUBJECT="${SNS_SUBJECT} - ${CIDR} already exists"
     else
         echo "Allow rule is not there yet. Adding it now..."
         aws ec2 authorize-security-group-egress --group-id ${SG_ID} --ip-permissions '[{"IpProtocol": "tcp", "FromPort": '"${PORT}"', "ToPort": '"${PORT}"', "IpRanges": [{"CidrIp": "'"${CIDR}"'"}]}]'
+        SNS_SUBJECT="${SNS_SUBJECT} - new IP ${CIDR} is added"
+    fi
+
+    if [ ! -z ${SNS_TOPIC} ]; then
+        echo "Sending SNS notification"
+        aws sns publish --subject "${SNS_SUBJECT}" --message "${SNS_SUBJECT}" --topic-arn ${SNS_TOPIC}
     fi
 }
 
