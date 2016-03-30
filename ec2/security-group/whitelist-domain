@@ -44,11 +44,10 @@ allow_ip () {
         e "Allow rule is not there yet. Adding it now..."
         aws ec2 authorize-security-group-egress --group-id ${SG_ID} --ip-permissions '[{"IpProtocol": "tcp", "FromPort": '"${PORT}"', "ToPort": '"${PORT}"', "IpRanges": [{"CidrIp": "'"${CIDR}"'"}]}]'
         SNS_SUBJECT="${SNS_SUBJECT} - new IP ${CIDR} is added"
-    fi
-
-    if [ ! -z ${SNS_TOPIC} ]; then
-        e "Sending SNS notification"
-        aws sns publish --subject "${SNS_SUBJECT}" --message "${SNS_SUBJECT}" --topic-arn ${SNS_TOPIC}
+        if [ ! -z ${SNS_TOPIC} ]; then
+            e "Sending SNS notification"
+            aws sns publish --subject "${SNS_SUBJECT}" --message "${SNS_SUBJECT}" --topic-arn ${SNS_TOPIC}
+        fi
     fi
 }
 
